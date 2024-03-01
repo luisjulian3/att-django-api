@@ -140,5 +140,22 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-CORS_ORIGIN_ALLOW_ALL= True
+SESSION_COOKIE_NAME = 'jwt'
+
+CORS_ORIGIN_ALLOW_ALL = True
+
 CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_ALL_ORIGINS = True
+
+
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:5173',
+]
+
+CORS_ALLOW_HEADERS = [
+    'access-control-allow-headers',
+    'access-control-allow-origin',
+    'authorization',
+    'content-type',
+]

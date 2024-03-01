@@ -2,9 +2,9 @@ from django.db import models
 
 
 class User(models.Model):
-    id = models.AutoField(primary_key=True)
-    nik = models.IntegerField(default=0)
+    nik = models.CharField(primary_key=True, max_length=18, unique=True)
     full_name = models.CharField(max_length=255)
+    phone = models.CharField(max_length=255)
     date_of_birth = models.DateField()
     place_of_birth = models.CharField(max_length=255)
     email = models.EmailField()
@@ -33,16 +33,19 @@ class User(models.Model):
 
 class AttendanceLog(models.Model):
     id = models.AutoField(primary_key=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='attendance_logs')
     nik = models.IntegerField()
-    status = models.IntegerField(choices=[(0, 'Failed'), (1, 'Success')])
+    presence_status = models.CharField(max_length=10)
+    attendance_in_status = models.CharField(max_length=10)
+    attendance_office = models.CharField(max_length=10)
     attendance_date = models.DateField()
-    attendance_in_time = models.DateTimeField()
-    attendance_in_date = models.DateField()
-    attendance_out_time = models.DateTimeField()
-    attendance_out_date = models.DateField()
-    working_hours = models.DurationField()
-    longitude = models.DecimalField(max_digits=9, decimal_places=6)
-    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    attendance_in_time = models.TimeField()
+    attendance_out_time = models.TimeField(null=True, blank=True)
+    working_hours = models.DurationField(null=True, blank=True)
+    longitude_in = models.DecimalField(max_digits=9, decimal_places=6)
+    latitude_in = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude_out = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    latitude_out = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
 
 
 class FaceImage(models.Model):
@@ -52,3 +55,24 @@ class FaceImage(models.Model):
     image = models.ImageField(upload_to='face_images/', null=True, blank=True)
     full_name = models.CharField(max_length=255)
     image_path = models.CharField(max_length=255)
+
+
+class OfficeMaster(models.Model):
+    office_id = models.AutoField(primary_key=True)
+    office_name = models.CharField(max_length=100)
+    office_lat = models.DecimalField(max_digits=17, decimal_places=15)
+    office_long = models.DecimalField(max_digits=18, decimal_places=15)
+
+
+class RoleMaster(models.Model):
+    role_id = models.AutoField(primary_key=True)
+    role_name = models.CharField(max_length=100)
+    attendance_employee_log = models.BooleanField(default=False)
+    register_employee = models.BooleanField(default=False)
+    settings_employee = models.BooleanField(default=False)
+
+
+class PresenceStatusMaster(models.Model):
+    presence_id = models.AutoField(primary_key=True)
+    presence_code = models.CharField(max_length=10, unique=True)
+    presence_name = models.CharField(max_length=100)

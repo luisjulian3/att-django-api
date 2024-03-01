@@ -4053,6 +4053,6 @@ opencv_lbphfaces:
       rows: 1
       cols: 1
       dt: i
-      data: [ 5 ]
+      data: [ 3 ]
    labelsInfo:
       []

@@ -1,18 +1,23 @@
-import datetime
-import os
-import xml
-from math import radians, sin, cos, sqrt, atan2
-
+from datetime import datetime, time, timedelta
+from math import radians, sin, cos, sqrt, atan2, inf
+import pytz
 import cv2
 import numpy as np
-import yaml
+import os
 
-from attendanceproject.models import FaceImage
+from attendanceproject.models import FaceImage, User, OfficeMaster
+from attendancesproject import settings
 from attendancesproject.settings import BASE_DIR
 
 
-def format_datetime(dt):
-    return dt.strftime("%Y-%m-%d %H:%M:%S")
+def get_datetime(timezone_name='Asia/Jakarta'):
+    timezone_obj = pytz.timezone(timezone_name)
+    current_datetime = datetime.now(timezone_obj)
+    return current_datetime
+
+
+def format_time(time_obj):
+    return time_obj.strftime('%H:%M:%S')
 
 
 def calculate_distance(lat1, lon1, lat2, lon2):
@@ -37,40 +42,85 @@ def calculate_distance(lat1, lon1, lat2, lon2):
     return distance
 
 
-def train_lbph_model():
-    faces = FaceImage.objects.all()
-    labels = []
-    images = []
+def calculate_working_hours(attendance_in_time_str, attendance_out_time_str):
+    # Parse attendance_in_time and attendance_out_time strings into datetime objects
+    attendance_in_datetime = datetime.strptime(attendance_in_time_str, '%H:%M:%S')
+    attendance_out_datetime = datetime.strptime(attendance_out_time_str, '%H:%M:%S')
 
-    xml_path = '/xml'
-    file_name = 'haarcascade_frontalface_default.xml'
-    face_cascade = cv2.CascadeClassifier(xml_path + file_name)
+    # Calculate the difference between attendance_out_time and attendance_in_time
+    working_hours_timedelta = attendance_out_datetime - attendance_in_datetime
 
-    for face in faces:
-        image = cv2.imread(face.image.path)
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+    # Calculate hours, minutes, and seconds from the timedelta
+    total_seconds = working_hours_timedelta.total_seconds()
+    hours = int(total_seconds // 3600)
+    minutes = int((total_seconds % 3600) // 60)
+    seconds = int(total_seconds % 60)
 
-        if len(faces) == 1:
-            (x, y, w, h) = faces[0]
+    # Convert the total seconds to a time object
+    working_hours_time = time(hours, minutes, seconds)
 
-            face_region = gray[y:y + h, x:x + w]
-
-            lbp = cv2.face.LBPHFaceRecognizer_create()
-            labels.append(face.id)
-            images.append(face_region)
-
-    lbph_model = cv2.face.LBPHFaceRecognizer_create()
-    lbph_model.train(images, np.array(labels))
-    print(lbph_model)
-    print(lbph_model.train(images, np.array(labels)))
-    lbph_model.save('lbph_model.yml')
+    return working_hours_time
 
 
-def detect_faces(image_data, base_dir):
-    print('a')
+def check_location(latitude, longitude):
+    # Fetch all office locations from the database
+    offices = OfficeMaster.objects.all()
+
+    # Initialize variables to keep track of the nearest office
+    nearest_office_name = None
+    nearest_distance = inf
+
+    # Iterate through each office and check the distance
+    for office in offices:
+        distance = calculate_distance(float(latitude), float(longitude), float(office.office_lat),
+                                      float(office.office_long))
+        if distance < 1 and distance < nearest_distance:
+            nearest_distance = distance
+            nearest_office_name = office.office_name
+
+    # Return the nearest office name if found within 1 km, otherwise return None
+    return nearest_office_name
+
+
+def calculate_presence_status(working_hours):
+    # Define the threshold for a full working day (8 hours)
+    full_day_threshold = time(hour=8)
+
+    # Compare working_hours with the threshold and determine presence status
+    if working_hours >= full_day_threshold:
+        return 'PRS'  # Present
+    else:
+        return 'LE'  # Late
+
+
+def get_attendance_status(attendance_time):
+    # Define the time ranges
+    late_start_time = time(7, 15, 0)
+    late_end_time = time(23, 59, 59)
+    late_end_time_next_day = time(4, 0, 0)
+    in_time_start_time = time(6, 0, 0)
+    in_time_end_time = time(7, 15, 0)
+    early_start_time = time(4, 0, 0)
+    early_end_time = time(6, 0, 0)
+
+    # Convert the string attendance time to a datetime object
+    attendance_datetime = datetime.strptime(attendance_time, '%H:%M:%S').time()
+
+    # Check the attendance status based on the time ranges
+    if late_start_time <= attendance_datetime <= late_end_time or attendance_datetime <= late_end_time_next_day:
+        return 'Late'
+    elif early_start_time <= attendance_datetime <= early_end_time:
+        return 'Early'
+    elif in_time_start_time <= attendance_datetime <= in_time_end_time:
+        return 'In Time'
+    else:
+        return 'Absent'
+
+
+def process_image(image_data, base_dir):
     nparr = np.fromstring(image_data, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
     # Loading the face detection classifier
     xml_path = os.path.join(base_dir, 'xml', 'haarcascade_frontalface_default.xml')
     face_cascade = cv2.CascadeClassifier(xml_path)
@@ -79,49 +129,122 @@ def detect_faces(image_data, base_dir):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # Detect faces in the image
-    faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
 
-    # Create a directory for each user if it doesn't exist
-    return faces, gray
+    return img, gray, faces
 
 
-def save_detected_faces(base_dir, nik, faces, gray):
-    # Create a directory for each user if it doesn't exist
-    user_faces_dir = os.path.join(base_dir, 'detected_faces')
-    os.makedirs(user_faces_dir, exist_ok=True)
+def detect_faces(image_data, base_dir, nik):
+    try:
+        img, gray, faces = process_image(image_data, base_dir)
 
-    # Save the detected faces with unique filenames
-    for idx, (x, y, w, h) in enumerate(faces):
-        # Crop the detected face region
-        cropped_face = gray[y:y + h, x:x + w]
+        # Check if faces are detected
+        if len(faces) == 0:
+            raise ValueError("No faces detected in the provided image")
 
-        # Define a unique filename based on nik and index
-        save_path = os.path.join(user_faces_dir, f'face_{nik}_{idx}.jpg')
+        # Save detected faces and train the LBPH model
+        save_detected_faces(gray, faces, base_dir, nik)
+        train_lbph_model(nik)
+
+        # Set the 'bind' field of the user to True
+        user = User.objects.get(nik=nik)
+        user.bind = True
+        user.save()
+
+        return 'Image processed successfully!', 200
+    except User.DoesNotExist:
+        return 'User with provided NIK does not exist', 404
+
+    except ValueError as ve:
+        return str(ve), 400
+
+    except Exception as e:
+        return f'An error occurred: {str(e)}', 500
+
+
+def save_detected_faces(gray, faces, base_dir, nik):
+    try:
+        user = User.objects.get(nik=nik)
+    except User.DoesNotExist:
+        # Handle the case where the user does not exist
+        return None
+
+    face_images = []
+    for i, (x, y, w, h) in enumerate(faces):
+        face_region = gray[y:y + h, x:x + w]
+
+        # Define a unique filename based on the face index and user's nik
+        filename = f'face_{nik}.jpg'
+        save_path = os.path.join(base_dir, 'detected_faces', filename)
 
         # Save the cropped face
-        cv2.imwrite(save_path, cropped_face)
+        cv2.imwrite(save_path, face_region)
 
+        # Create a FaceImage object for the saved face
+        face_image = FaceImage.objects.create(
+            nik=nik,
+            image_id=filename,
+            image=save_path,
+            image_path=save_path
+        )
+        face_images.append(face_image)
 
-def train_lbph_on_detected_faces(base_dir):
-    print('1')
-    recognizer = cv2.face.LBPHFaceRecognizer_create()
-    print('2')
+    return face_images
 
-    faces = []
+def train_lbph_model(nik):
+    faces = FaceImage.objects.filter(nik=nik)
     labels = []
+    images = []
 
-    detected_faces_path = os.path.join(base_dir, 'detected_faces')
-    for filename in os.listdir(detected_faces_path):
-        print(filename)
-        if filename.endswith('.jpg'):
-            face_path = os.path.join(detected_faces_path, filename)
-            label = int(filename.split('_')[1].split('.')[0])
-            face_image = cv2.imread(face_path, cv2.IMREAD_GRAYSCALE)
+    for face in faces:
+        image = cv2.imread(face.image.path)
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        images.append(gray)
+        labels.append(face.nik)
 
-            faces.append(face_image)
-            labels.append(label)
-    print('3')
-    recognizer.train(faces, np.array(labels))
-    recognizer.save(os.path.join(base_dir, 'lbph_model.yml'))
-    print('4')
+    # Convert labels to numpy array
+    labels = np.array(labels)
 
+    lbph_model = cv2.face.LBPHFaceRecognizer_create()
+    lbph_model.train(images, labels)
+
+    # Save the LBPH model
+    lbph_model_path = os.path.join(settings.BASE_DIR,'trained_models', f'lbph_model_{nik}.yml')
+    lbph_model.save(lbph_model_path)
+
+
+def recognize_face(image_data, base_dir, nik):
+    try:
+        img, gray, faces = process_image(image_data, base_dir)
+
+        recognized_results = []
+        # Check if faces are detected
+        if len(faces) == 0:
+            raise ValueError("No faces detected in the provided image")
+
+        # Load the LBPH recognizer
+        recognizer = cv2.face.LBPHFaceRecognizer_create()
+
+        # Load the trained model based on the provided nik
+        model_path = os.path.join(base_dir, 'trained_models', f'lbph_model_{nik}.yml')
+        recognizer.read(model_path)
+
+        # Process each detected face
+        for idx, (x, y, w, h) in enumerate(faces):
+            face_region = gray[y:y + h, x:x + w]
+
+            # Perform face recognition using the loaded model
+            label, confidence = recognizer.predict(face_region)
+        print(confidence)
+        if confidence <= 80:
+            return confidence, 200
+        else:
+            return confidence, 400  # 200 is the HTTP status code for success
+
+    except ValueError as ve:
+        # Custom error message for "No faces detected" case
+        return str(ve), 404  # 404 is the HTTP status code for not found
+
+    except Exception as e:
+        # Generic error message for other exceptions
+        return f'An error occurred: {str(e)}', 500
