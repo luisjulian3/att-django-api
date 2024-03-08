@@ -139,9 +139,12 @@ class UserDashboardSerializer(serializers.ModelSerializer):
         return self.format_duration(average_duration['avg_working_hours'])
 
     def format_duration(self, duration):
-        hours, remainder = divmod(duration.seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        return '{:02d}:{:02d}:{:02d}'.format(hours, minutes, seconds)
+        if duration is not None:
+            hours, remainder = divmod(duration.seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            return '{:02d}:{:02d}:{:02d}'.format(hours, minutes, seconds)
+        else:
+            return '00:00:00'
 
     class Meta:
         model = User

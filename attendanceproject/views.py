@@ -1,4 +1,6 @@
 import datetime
+from collections import Counter
+from datetime import datetime as dt
 from .models import RoleMaster
 import jwt
 import pytz
@@ -80,11 +82,7 @@ class LoginTest(generics.CreateAPIView):
             }
             return JsonResponse(response_data, status=status.HTTP_400_BAD_REQUEST)
 
-        # Fetch the user's role
         user_role = RoleMaster.objects.filter(role_id=user.role_id).first()
-        print('user role : ', user.role_id)
-        print('user role : ', user_role.role_id)
-        print('user role : ', user_role.attendance_employee_log)
 
         if user_role is None:
             response_data = {
@@ -97,17 +95,13 @@ class LoginTest(generics.CreateAPIView):
 
         current_time = timezone.now()
 
-        # Set the timezone to Indonesia (WIB)
         indonesia_timezone = pytz.timezone('Asia/Jakarta')
         current_time = current_time.astimezone(indonesia_timezone)
 
-        # Calculate expiration time as Unix timestamp (seconds since epoch)
         exp_timestamp = int((current_time + datetime.timedelta(hours=1)).timestamp())
 
-        # Calculate 'iat' as Unix timestamp (seconds since epoch)
         iat_timestamp = int(current_time.timestamp())
 
-        # Your payload with 'exp' and 'iat' values in Unix timestamp format
         payload = {
             'nik': user.nik,
             'exp': exp_timestamp,
@@ -289,13 +283,19 @@ class RecognizeAttendanceIN(generics.CreateAPIView):
             current_datetime = get_datetime()
 
             # Extract the date and time components
-            attendance_date = current_datetime.date()
-            today = attendance_date.today()
-            existing_logs = AttendanceLog.objects.filter(nik=nik, attendance_date=today)
+            # attendance_date = current_datetime.date()
+            fake_date = dt(year=2024, month=3, day=1)
+            print(fake_date)
+            # Use the fake date instead of current_datetime.date()
+            attendance_date = fake_date
+            print(attendance_date)
+            # today = attendance_date.today()
 
-            # if existing_logs.exists():
-            #    return JsonResponse({'message': 'Attendance has already been logged for today'},
-            #                        status=status.HTTP_400_BAD_REQUEST)
+            existing_logs = AttendanceLog.objects.filter(nik=nik, attendance_date=attendance_date)
+
+            if existing_logs.exists():
+                return JsonResponse({'message': 'Attendance has already been logged for today'},
+                                    status=status.HTTP_400_BAD_REQUEST)
 
             # Check if latitude and longitude are provided
             if latitude is None or longitude is None:
@@ -312,12 +312,15 @@ class RecognizeAttendanceIN(generics.CreateAPIView):
             print('message', message)
             # Check the status code and return a corresponding response
             if status_code == 200:
-                attendance_date = get_datetime()
+                # attendance_date = get_datetime()
+                fake_date = dt(year=2024, month=3, day=1)
+                # Use the fake date instead of current_datetime.date()
+                attendance_date = fake_date
                 attendance_in_time = attendance_date.time()
                 formatted_time = attendance_in_time.strftime('%H:%M:%S')
 
-                # testing_only = '07:14:00'
-                attendance_status = get_attendance_status(formatted_time)
+                testing_only = '07:10:00'
+                attendance_status = get_attendance_status(testing_only)
                 print(attendance_status)
                 print(attendance_in_time)
 
@@ -329,7 +332,7 @@ class RecognizeAttendanceIN(generics.CreateAPIView):
                     attendance_office=office_name,
                     attendance_in_status=attendance_status,  # Attendance in flag
                     attendance_date=attendance_date,
-                    attendance_in_time=formatted_time,
+                    attendance_in_time=testing_only,
                     longitude_in=longitude,
                     latitude_in=latitude
                 )
@@ -360,9 +363,14 @@ class RecognizeAttendanceOUT(generics.CreateAPIView):
             current_datetime = get_datetime()
 
             # Extract the date and time components
-            attendance_date = current_datetime.date()
-            today = attendance_date.today()
-            existing_logs = AttendanceLog.objects.filter(nik=nik, attendance_date=today)
+            # attendance_date = current_datetime.date()
+            fake_date = dt(year=2024, month=3, day=1)
+
+            # Use the fake date instead of current_datetime.date()
+            attendance_date = fake_date
+            # today = attendance_date.today()
+            print(attendance_date)
+            existing_logs = AttendanceLog.objects.filter(nik=nik, attendance_date=attendance_date)
 
             if not existing_logs.exists():
                 return JsonResponse({'message': 'havent done any attendance yet today'},
@@ -398,13 +406,14 @@ class RecognizeAttendanceOUT(generics.CreateAPIView):
                 formatted_time = attendance_in_time.strftime('%H:%M:%S')
                 # Calculate working hours
 
+                testing_only = '17:24:00'
                 attendance_in_time_str = attendance_log.attendance_in_time.strftime('%H:%M:%S')
-                working_hours = calculate_working_hours(attendance_in_time_str, formatted_time)
+                working_hours = calculate_working_hours(attendance_in_time_str, testing_only)
 
                 presence_status = calculate_presence_status(working_hours)
                 # Update the existing log with attendance_out_time
                 attendance_log.attendance_out = True
-                attendance_log.attendance_out_time = formatted_time
+                attendance_log.attendance_out_time = testing_only
                 attendance_log.working_hours = working_hours
                 attendance_log.latitude_out = latitude
                 attendance_log.longitude_out = longitude
@@ -427,16 +436,37 @@ class AttendanceLogList(generics.ListAPIView):
 
     def get(self, request, *args, **kwargs):
         nik = request.query_params.get('nik', None)
-        if nik is not None:
-            queryset = AttendanceLog.objects.filter(nik=nik).order_by('-attendance_date')
-        else:
-            queryset = AttendanceLog.objects.all().order_by('-attendance_date')
+        start_date = request.query_params.get('start_date', None)
+        end_date = request.query_params.get('end_date', None)
+
+        # Ensure that nik is provided, otherwise return an empty response
+        if nik is None:
+            return JsonResponse({"data": []})
+
+        queryset = AttendanceLog.objects.filter(nik=nik)
+
+        # Filter by date range if provided
+        if start_date and end_date:
+            # Convert start_date and end_date strings to datetime objects
+            start_date = dt.strptime(start_date, "%Y-%m-%d").date()
+            end_date = dt.strptime(end_date, "%Y-%m-%d").date()
+
+            queryset = queryset.filter(attendance_date__range=(start_date, end_date))
+
+        # Order the queryset
+        queryset = queryset.order_by('-attendance_date')
 
         # Serialize queryset using serializer
         serializer = self.serializer_class(queryset, many=True)
 
+        # Calculate the presence status count
+        presence_status_count = Counter(log['presence_status'] for log in serializer.data)
+
         # Create a dictionary with the "data" key and the serialized data
-        data = {"data": serializer.data}
+        data = {
+            "data": serializer.data,
+            "presence_status_count": dict(presence_status_count)
+        }
 
         return JsonResponse(data, safe=False)
 

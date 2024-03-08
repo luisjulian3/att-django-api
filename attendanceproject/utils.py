@@ -129,22 +129,27 @@ def process_image(image_data, base_dir):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # Detect faces in the image
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(20, 20))
 
     return img, gray, faces
 
 
 def detect_faces(image_data, base_dir, nik):
     try:
+        existing_face = FaceImage.objects.filter(nik=nik).exists()
+        if existing_face:
+            raise ValueError("Face already registered for the provided NIK")
+
         img, gray, faces = process_image(image_data, base_dir)
 
-        # Check if faces are detected
         if len(faces) == 0:
             raise ValueError("No faces detected in the provided image")
+        img, gray, faces = process_image(image_data, base_dir)
 
-        # Save detected faces and train the LBPH model
         save_detected_faces(gray, faces, base_dir, nik)
+        print('asdasd')
         train_lbph_model(nik)
+        print('1231231')
 
         # Set the 'bind' field of the user to True
         user = User.objects.get(nik=nik)
@@ -166,21 +171,17 @@ def save_detected_faces(gray, faces, base_dir, nik):
     try:
         user = User.objects.get(nik=nik)
     except User.DoesNotExist:
-        # Handle the case where the user does not exist
         return None
 
     face_images = []
     for i, (x, y, w, h) in enumerate(faces):
         face_region = gray[y:y + h, x:x + w]
 
-        # Define a unique filename based on the face index and user's nik
         filename = f'face_{nik}.jpg'
         save_path = os.path.join(base_dir, 'detected_faces', filename)
 
-        # Save the cropped face
         cv2.imwrite(save_path, face_region)
 
-        # Create a FaceImage object for the saved face
         face_image = FaceImage.objects.create(
             nik=nik,
             image_id=filename,
@@ -190,6 +191,7 @@ def save_detected_faces(gray, faces, base_dir, nik):
         face_images.append(face_image)
 
     return face_images
+
 
 def train_lbph_model(nik):
     faces = FaceImage.objects.filter(nik=nik)
@@ -209,7 +211,7 @@ def train_lbph_model(nik):
     lbph_model.train(images, labels)
 
     # Save the LBPH model
-    lbph_model_path = os.path.join(settings.BASE_DIR,'trained_models', f'lbph_model_{nik}.yml')
+    lbph_model_path = os.path.join(settings.BASE_DIR, 'trained_models', f'lbph_model_{nik}.yml')
     lbph_model.save(lbph_model_path)
 
 
@@ -236,7 +238,7 @@ def recognize_face(image_data, base_dir, nik):
             # Perform face recognition using the loaded model
             label, confidence = recognizer.predict(face_region)
         print(confidence)
-        if confidence <= 80:
+        if confidence <= 55:
             return confidence, 200
         else:
             return confidence, 400  # 200 is the HTTP status code for success
