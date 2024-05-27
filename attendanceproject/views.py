@@ -217,7 +217,7 @@ class UserSearch(generics.ListAPIView):
     serializer_class = UserSearchSerializer
 
     def get_queryset(self):
-        # Get the search query from the URL parameters
+         # Get the search query from the URL parameters
         nik = self.request.query_params.get('nik', None)
         if nik and len(nik) >= 2:  # Check if NIK has at least 4 digits
             # Perform the search based on the NIK
