@@ -1,1 +1,1 @@
-web: gunicorn MyApi.wsgi
+web: gunicorn attendancesproject.wsgi --log-file -
