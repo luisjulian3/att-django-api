@@ -136,7 +136,7 @@ CORS_ALLOWED_ORIGINS = [
     'http://127.0.0.1',
 ]
 
-ALLOWED_HOSTS = ['https://attendance-django-api-a9687cca7373.herokuapp.com/', '127.0.0.1']
+ALLOWED_HOSTS = ['attendance-django-api-a9687cca7373.herokuapp.com/', '127.0.0.1']
 
 CORS_ALLOW_HEADERS = [
     'access-control-allow-headers',
