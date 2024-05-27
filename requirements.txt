@@ -11,7 +11,7 @@ django-timedeltafield==0.7.10
 djangorestframework==3.14.0
 gunicorn==22.0.0
 idna==3.4
-numpy==1.24.4
+numpy==1.24.6
 opencv-contrib-python==4.8.1.78
 opencv-python==4.8.1.78
 packaging==24.0
