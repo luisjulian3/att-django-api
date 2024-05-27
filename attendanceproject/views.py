@@ -15,8 +15,7 @@ from attendancesproject import settings
 from .models import User, FaceImage, AttendanceLog
 from .serializers import RegistrationSerializer, UserSerializer, UserSearchSerializer, AttendanceLogSerializer, \
     UserDashboardSerializer, UserDashboardAttendanceLogSerializer, UserUpdateSerializer
-from .utils import detect_faces, recognize_face, check_location, get_datetime, \
-    calculate_working_hours, calculate_presence_status, get_attendance_status
+from .utils import detect_faces, recognize_face, check_location, get_datetime,calculate_working_hours, calculate_presence_status, get_attendance_status
 
 
 class RegistrationView(APIView):

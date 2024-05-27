@@ -1,8 +1,6 @@
 from django.contrib import admin
 from django.urls import path
-from attendanceproject.views import RegistrationView, LoginTest, LogoutView, UserView, DeleteAllDataView, \
-    TrainFace, RecognizeAttendanceIN, RecognizeAttendanceOUT, UserSearch, UserViewLog, AttendanceLogList, \
-    DashboardView, HomePageData, UserUpdateView
+from attendanceproject.views import RegistrationView, LoginTest, LogoutView, UserView, DeleteAllDataView, TrainFace, RecognizeAttendanceIN, RecognizeAttendanceOUT, UserSearch, UserViewLog, AttendanceLogList, DashboardView, HomePageData, UserUpdateView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
