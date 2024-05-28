@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'attendanceproject',
+    'sslserver',
 ]
 
 MIDDLEWARE = [
@@ -130,13 +131,16 @@ CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = True
 
+SSL_CERTIFICATE = os.path.join(BASE_DIR, 'certs', 'localhost.crt')
+SSL_KEY = os.path.join(BASE_DIR, 'certs', 'localhost.key')
+
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://192.168.42.154',
     'http://127.0.0.1',
 ]
 
-ALLOWED_HOSTS = ['attendance-django-api-a9687cca7373.herokuapp.com', '127.0.0.1']
+ALLOWED_HOSTS = ['attendance-django-api-a9687cca7373.herokuapp.com', '127.0.0.1','fancy-pavlova-f2b814.netlify.app']
 
 CORS_ALLOW_HEADERS = [
     'access-control-allow-headers',
