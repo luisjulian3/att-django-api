@@ -47,7 +47,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
         Serialize instance to representation.
         """
         representation = super().to_representation(instance)
-        representation['id'] = representation['nik']  # Set 'id' field value equal to 'nik' value
+        representation['id'] = representation['nik']  #'id' field value equal to 'nik' value
         return representation
 
 
@@ -124,17 +124,17 @@ class UserDashboardSerializer(serializers.ModelSerializer):
         return dict(obj._meta.get_field('dept_id').choices).get(obj.dept_id, '')
 
     def get_average_attendance_in_time(self, obj):
-        queryset = AttendanceLog.objects.all()
+        queryset = AttendanceLog.objects.filter(user=obj)
         average_duration = queryset.aggregate(avg_attendance_in_time=Avg('attendance_in_time'))
         return self.format_duration(average_duration['avg_attendance_in_time'])
 
     def get_average_attendance_out_time(self, obj):
-        queryset = AttendanceLog.objects.all()
+        queryset = AttendanceLog.objects.filter(user=obj)
         average_duration = queryset.aggregate(avg_attendance_out_time=Avg('attendance_out_time'))
         return self.format_duration(average_duration['avg_attendance_out_time'])
 
     def get_average_working_hours(self, obj):
-        queryset = AttendanceLog.objects.all()
+        queryset = AttendanceLog.objects.filter(user=obj)
         average_duration = queryset.aggregate(avg_working_hours=Avg('working_hours'))
         return self.format_duration(average_duration['avg_working_hours'])
 

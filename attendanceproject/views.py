@@ -39,16 +39,13 @@ class RegistrationView(APIView):
 
 class UserUpdateView(APIView):
     def post(self, request):
-        # Get the NIK from the request data
         nik = request.query_params.get('nik')
         print(nik)
         try:
-            # Retrieve the user based on the provided NIK
             user = User.objects.get(nik=nik)
         except User.DoesNotExist:
             return JsonResponse({"message": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        # Serialize the user data with the update data
         serializer = UserUpdateSerializer(user, data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -130,30 +127,24 @@ class LoginTest(generics.CreateAPIView):
 
 class HomePageData(APIView):
     def get(self, request):
-        # Retrieve token from request headers
         token = request.headers.get('Authorization', '').split(' ')[1]
 
         if not token:
             return Response({'message': 'Unauthenticated!'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Decode the token
             payload = jwt.decode(token, 'secret', algorithms=['HS256'])
-            # Extract user information from payload
             nik = payload.get('nik')
-            # Fetch user based on nik
             user = User.objects.filter(nik=nik).first()
 
             if not user:
                 return Response({'message': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-            # Fetch user's role
             user_role = RoleMaster.objects.filter(role_id=user.role_id).first()
 
             if not user_role:
                 return Response({'message': 'Role not found for the user'}, status=status.HTTP_404_NOT_FOUND)
 
-            # Construct response data
             response_data = {
                 'full_name': user.full_name,
                 'bind_status': user.bind,
@@ -216,14 +207,11 @@ class UserSearch(generics.ListAPIView):
     serializer_class = UserSearchSerializer
 
     def get_queryset(self):
-         # Get the search query from the URL parameters
         nik = self.request.query_params.get('nik', None)
-        if nik and len(nik) >= 2:  # Check if NIK has at least 4 digits
-            # Perform the search based on the NIK
+        if nik and len(nik) >= 2:
             queryset = User.objects.filter(nik__icontains=nik)
             return queryset
         else:
-            # Return an empty queryset if the NIK is less than 4 digits
             return User.objects.none()
 
 
@@ -240,7 +228,6 @@ class LogoutView(APIView):
 class DeleteAllDataView(generics.CreateAPIView):
     def delete(self, request):
         try:
-            # Delete all instances of YourModel
             User.objects.all().delete()
             FaceImage.objects.all().delete()
             AttendanceLog.objects.all().delete()
@@ -281,22 +268,15 @@ class RecognizeAttendanceIN(generics.CreateAPIView):
 
             current_datetime = get_datetime()
 
-            # Extract the date and time components
-            # attendance_date = current_datetime.date()
-            fake_date = dt(year=2024, month=3, day=1)
-            print(fake_date)
-            # Use the fake date instead of current_datetime.date()
-            attendance_date = fake_date
-            print(attendance_date)
-            # today = attendance_date.today()
+            attendance_date = current_datetime.date()
+            today = attendance_date.today()
 
-            existing_logs = AttendanceLog.objects.filter(nik=nik, attendance_date=attendance_date)
+            existing_logs = AttendanceLog.objects.filter(nik=nik, attendance_date=today)
 
             if existing_logs.exists():
                 return JsonResponse({'message': 'Attendance has already been logged for today'},
                                     status=status.HTTP_400_BAD_REQUEST)
 
-            # Check if latitude and longitude are provided
             if latitude is None or longitude is None:
                 return JsonResponse({'message': 'Latitude and longitude are required'},
                                     status=status.HTTP_400_BAD_REQUEST)
@@ -309,41 +289,34 @@ class RecognizeAttendanceIN(generics.CreateAPIView):
 
             message, status_code = recognize_face(image_file.read(), settings.BASE_DIR, nik)
             print('message', message)
-            # Check the status code and return a corresponding response
             if status_code == 200:
-                # attendance_date = get_datetime()
-                fake_date = dt(year=2024, month=3, day=1)
-                # Use the fake date instead of current_datetime.date()
-                attendance_date = fake_date
+                attendance_date = get_datetime()
                 attendance_in_time = attendance_date.time()
                 formatted_time = attendance_in_time.strftime('%H:%M:%S')
 
-                testing_only = '07:10:00'
-                attendance_status = get_attendance_status(testing_only)
+                attendance_status = get_attendance_status(formatted_time)
                 print(attendance_status)
                 print(attendance_in_time)
 
-                # Create the AttendanceLog object
                 attendance_log = AttendanceLog.objects.create(
                     nik=nik,
                     user_id=nik,
-                    presence_status='AWT',  # Presence status code
+                    presence_status='AWT',
                     attendance_office=office_name,
-                    attendance_in_status=attendance_status,  # Attendance in flag
+                    attendance_in_status=attendance_status,
                     attendance_date=attendance_date,
-                    attendance_in_time=testing_only,
+                    attendance_in_time=formatted_time,
                     longitude_in=longitude,
                     latitude_in=latitude
                 )
 
-                # Save the attendance log
                 attendance_log.save()
 
                 return JsonResponse({
                     'message': 'Attendance In Success',
                     'status': status_code,
-                    'presence_status': 'AWT',  # You can set the presence status here
-                    'office_name': office_name  # Add the office name here
+                    'presence_status': 'AWT',
+                    'office_name': office_name
                 }, status=status_code)
             else:
                 return JsonResponse({'message': 'Face doesnt match', 'status:': status_code}, status=status_code)
@@ -361,15 +334,9 @@ class RecognizeAttendanceOUT(generics.CreateAPIView):
             longitude = request.data.get('longitude')
             current_datetime = get_datetime()
 
-            # Extract the date and time components
-            # attendance_date = current_datetime.date()
-            fake_date = dt(year=2024, month=3, day=1)
-
-            # Use the fake date instead of current_datetime.date()
-            attendance_date = fake_date
-            # today = attendance_date.today()
-            print(attendance_date)
-            existing_logs = AttendanceLog.objects.filter(nik=nik, attendance_date=attendance_date)
+            attendance_date = current_datetime.date()
+            today = attendance_date.today()
+            existing_logs = AttendanceLog.objects.filter(nik=nik, attendance_date=today)
 
             if not existing_logs.exists():
                 return JsonResponse({'message': 'havent done any attendance yet today'},
@@ -377,7 +344,6 @@ class RecognizeAttendanceOUT(generics.CreateAPIView):
 
             attendance_log = existing_logs.first()
 
-            # Check if attendance_out_time is already filled
             if attendance_log.attendance_out_time:
                 return JsonResponse({'message': 'Attendance out already logged'},
                                     status=status.HTTP_400_BAD_REQUEST)
@@ -398,21 +364,17 @@ class RecognizeAttendanceOUT(generics.CreateAPIView):
 
             message, status_code = recognize_face(image_file.read(), settings.BASE_DIR, nik)
 
-            # Check the status code and return a corresponding response
             if status_code == 200:
                 attendance_date = get_datetime()
                 attendance_in_time = attendance_date.time()
                 formatted_time = attendance_in_time.strftime('%H:%M:%S')
-                # Calculate working hours
 
-                testing_only = '17:24:00'
                 attendance_in_time_str = attendance_log.attendance_in_time.strftime('%H:%M:%S')
-                working_hours = calculate_working_hours(attendance_in_time_str, testing_only)
+                working_hours = calculate_working_hours(attendance_in_time_str, formatted_time)
 
                 presence_status = calculate_presence_status(working_hours)
-                # Update the existing log with attendance_out_time
                 attendance_log.attendance_out = True
-                attendance_log.attendance_out_time = testing_only
+                attendance_log.attendance_out_time = formatted_time
                 attendance_log.working_hours = working_hours
                 attendance_log.latitude_out = latitude
                 attendance_log.longitude_out = longitude
@@ -438,30 +400,23 @@ class AttendanceLogList(generics.ListAPIView):
         start_date = request.query_params.get('start_date', None)
         end_date = request.query_params.get('end_date', None)
 
-        # Ensure that nik is provided, otherwise return an empty response
         if nik is None:
             return JsonResponse({"data": []})
 
         queryset = AttendanceLog.objects.filter(nik=nik)
 
-        # Filter by date range if provided
         if start_date and end_date:
-            # Convert start_date and end_date strings to datetime objects
             start_date = dt.strptime(start_date, "%Y-%m-%d").date()
             end_date = dt.strptime(end_date, "%Y-%m-%d").date()
 
             queryset = queryset.filter(attendance_date__range=(start_date, end_date))
 
-        # Order the queryset
         queryset = queryset.order_by('-attendance_date')
 
-        # Serialize queryset using serializer
         serializer = self.serializer_class(queryset, many=True)
 
-        # Calculate the presence status count
         presence_status_count = Counter(log['presence_status'] for log in serializer.data)
 
-        # Create a dictionary with the "data" key and the serialized data
         data = {
             "data": serializer.data,
             "presence_status_count": dict(presence_status_count)
@@ -482,22 +437,18 @@ class DashboardView(APIView):
         except jwt.ExpiredSignatureError:
             return Response({'Message': 'Unauthenticated!'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Fetch user data
         user = User.objects.get(nik=payload['nik'])
 
-        # Fetch attendance logs for the user
         attendance_logs = AttendanceLog.objects.filter(user=user).order_by('-attendance_date')[:3]
 
-        # Serialize user data
         user_serializer = UserDashboardSerializer(user)
 
-        # Serialize attendance logs data
         attendance_logs_serializer = UserDashboardAttendanceLogSerializer(attendance_logs, many=True)
 
-        # Combine user data and attendance logs data
         response_data = {
             'user': user_serializer.data,
             'attendance_logs': attendance_logs_serializer.data
         }
+        print(response_data)
 
         return Response(response_data)
